@@ -105,6 +105,36 @@ spec:
           echo "   Warning: ValidatingWebhookConfiguration not found yet, will be updated after webhook is created"
           
           echo "✅ Certificate generated and applied successfully!"
+          
+          # Generate API key if secret doesn't exist
+          echo ""
+          echo "🔑 Checking API key secret..."
+          API_KEY_SECRET_NAME="kube-freezer-api-keys"
+          if kubectl get secret "${API_KEY_SECRET_NAME}" -n "${NAMESPACE}" &>/dev/null; then
+            echo "   API key secret already exists, skipping key generation."
+            echo "   To generate a new key, delete the secret and upgrade the release."
+          else
+            echo "   Generating default API key for admin user..."
+            API_KEY=$$(openssl rand -hex 16)
+            FULL_KEY="kf-admin-$$API_KEY"
+            echo "   Generated API key: $$FULL_KEY"
+            # Create the secret
+            kubectl create secret generic "${API_KEY_SECRET_NAME}" \
+              --from-literal=api_key_admin="$$FULL_KEY" \
+              --namespace="${NAMESPACE}" \
+              --dry-run=client -o yaml | kubectl apply -f -
+            # Add Helm labels for proper management
+            kubectl label secret "${API_KEY_SECRET_NAME}" \
+              --namespace="${NAMESPACE}" \
+              app.kubernetes.io/name=kube-freezer \
+              app.kubernetes.io/instance=kube-freezer \
+              app.kubernetes.io/managed-by=Helm \
+              --overwrite || true
+            echo "   ✅ API key secret created: ${API_KEY_SECRET_NAME}"
+            echo "   ⚠️  Save this key securely: $$FULL_KEY"
+            echo "   To view the key later:"
+            echo "     kubectl get secret ${API_KEY_SECRET_NAME} -n ${NAMESPACE} -o jsonpath='{.data.api_key_admin}' | base64 -d && echo"
+          fi
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
