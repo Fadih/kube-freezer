@@ -39,9 +39,9 @@
    - View config: kubectl get configmap {{ include "kube-freezer.fullname" . }}-config -n {{ $namespace }} -o yaml
 
 📚 Documentation:
-   - API Documentation: See docs/API_KEYS.md
-   - Authentication: See docs/AUTHENTICATION.md
-   - Troubleshooting: See docs/TROUBLESHOOTING.md
+   - GitHub Repository: https://github.com/Fadih/kube-freezer
+   - API Documentation: https://fadih.github.io/kube-freezer/
+
 
 
 

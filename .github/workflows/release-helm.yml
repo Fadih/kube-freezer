@@ -141,6 +141,136 @@ jobs:
           prerelease: false
           tag_name: ${{ github.event.release.tag_name }}
 
+      - name: Prepare documentation for Pages
+        run: |
+          # Create a pages directory structure
+          mkdir -p ./pages/docs
+          
+          # Copy Helm charts
+          cp -r ./charts ./pages/
+          
+          # Copy documentation files
+          cp -r ./docs ./pages/
+          
+          # Create an index.html for the documentation site
+          REPO_OWNER="${{ github.repository_owner }}"
+          REPO_NAME="${{ github.repository }}"
+          REPO_URL="https://${REPO_OWNER}.github.io/kube-freezer"
+          
+          cat > ./pages/index.html << EOF
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>KubeFreezer Documentation</title>
+              <style>
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                      line-height: 1.6;
+                      max-width: 1200px;
+                      margin: 0 auto;
+                      padding: 20px;
+                      background: #f5f5f5;
+                  }
+                  .container {
+                      background: white;
+                      padding: 40px;
+                      border-radius: 8px;
+                      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                  }
+                  h1 {
+                      color: #2c3e50;
+                      border-bottom: 3px solid #3498db;
+                      padding-bottom: 10px;
+                  }
+                  h2 {
+                      color: #34495e;
+                      margin-top: 30px;
+                  }
+                  .section {
+                      margin: 30px 0;
+                  }
+                  .doc-link {
+                      display: block;
+                      padding: 12px;
+                      margin: 8px 0;
+                      background: #ecf0f1;
+                      border-left: 4px solid #3498db;
+                      text-decoration: none;
+                      color: #2c3e50;
+                      border-radius: 4px;
+                      transition: background 0.3s;
+                  }
+                  .doc-link:hover {
+                      background: #d5dbdb;
+                  }
+                  .helm-repo {
+                      background: #e8f5e9;
+                      padding: 20px;
+                      border-radius: 8px;
+                      margin: 20px 0;
+                  }
+                  code {
+                      background: #f4f4f4;
+                      padding: 2px 6px;
+                      border-radius: 3px;
+                      font-family: 'Courier New', monospace;
+                  }
+                  pre {
+                      background: #2c3e50;
+                      color: #ecf0f1;
+                      padding: 15px;
+                      border-radius: 5px;
+                      overflow-x: auto;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>🚀 KubeFreezer Documentation</h1>
+                  
+                  <div class="section">
+                      <p>Kubernetes admission controller for deployment freeze management. Block deployments during maintenance windows, holidays, or scheduled freezes with configurable bypass mechanisms for emergency patches.</p>
+                  </div>
+                  
+                  <div class="helm-repo">
+                      <h2>📦 Helm Chart Repository</h2>
+                      <p>Add the Helm repository:</p>
+                      <pre>helm repo add kube-freezer ${REPO_URL}
+helm repo update</pre>
+                      <p>Install:</p>
+                      <pre>helm install kube-freezer kube-freezer/kube-freezer \\
+  --namespace kube-freezer \\
+  --create-namespace</pre>
+                  </div>
+                  
+                  <div class="section">
+                      <h2>📚 Documentation</h2>
+                      <a href="docs/API_KEYS.md" class="doc-link">🔑 API Keys - How to generate and use API keys</a>
+                      <a href="docs/AUTHENTICATION.md" class="doc-link">🔐 Authentication - Authentication methods and setup</a>
+                      <a href="docs/BACKEND_AUTHENTICATION.md" class="doc-link">🔒 Backend Authentication - Backend authentication details</a>
+                      <a href="docs/FRONTEND_DEPLOYMENT.md" class="doc-link">🎨 Frontend Deployment - Frontend deployment guide</a>
+                      <a href="docs/HOW_TO_USE_TEMPLATES.md" class="doc-link">📋 How to Use Templates - Template usage guide</a>
+                      <a href="docs/TEMPLATE_APIS.md" class="doc-link">🔌 Template APIs - Template API reference</a>
+                      <a href="docs/TEMPLATES_VS_SCHEDULES.md" class="doc-link">⚖️ Templates vs Schedules - Understanding the difference</a>
+                      <a href="docs/TROUBLESHOOTING_TEMPLATES.md" class="doc-link">🔧 Troubleshooting Templates - Common issues and solutions</a>
+                  </div>
+                  
+                  <div class="section">
+                      <h2>🔗 Links</h2>
+                      <p>
+                          <a href="https://github.com/${REPO_NAME}">GitHub Repository</a> | 
+                          <a href="charts/index.yaml">Helm Chart Index</a>
+                      </p>
+                  </div>
+              </div>
+          </body>
+          </html>
+          EOF
+          echo "✅ Documentation prepared for Pages"
+          ls -la ./pages/
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
         with:
@@ -149,7 +279,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./charts
+          path: ./pages
 
       - name: Deploy to GitHub Pages
         id: deployment
