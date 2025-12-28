@@ -1,19 +1,16 @@
+{{- if .Values.createNamespace }}
 {{- $namespace := include "kube-freezer.namespace" . }}
 {{- $existingNamespace := lookup "v1" "Namespace" "" $namespace }}
 {{- if not $existingNamespace }}
 # Create namespace so Helm can manage it (including deletion on uninstall)
-# If namespace already exists (e.g., from --create-namespace), this template won't create it
-# but Helm will still manage other resources in the namespace
+# NOTE: If you use --create-namespace flag, set createNamespace: false in values.yaml
+# to avoid conflicts. The --create-namespace flag creates the namespace before templates run.
 apiVersion: v1
 kind: Namespace
 metadata:
   name: {{ $namespace }}
   labels:
     {{- include "kube-freezer.labels" . | nindent 4 }}
-{{- else }}
-# Namespace already exists (likely created by --create-namespace flag)
-# Note: Namespaces created by --create-namespace are NOT managed by Helm
-# and will NOT be deleted on 'helm uninstall'. To delete the namespace:
-# kubectl delete namespace {{ $namespace }}
+{{- end }}
 {{- end }}
 
