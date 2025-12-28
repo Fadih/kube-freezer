@@ -18,6 +18,10 @@ spec:
         {{- include "kube-freezer.selectorLabels" . | nindent 8 }}
         component: cleanup
     spec:
+      # Note: ServiceAccount might be deleted by Helm before this hook runs
+      # The cleanup job needs cluster-admin permissions via the ServiceAccount
+      # If ServiceAccount is gone, this job will fail - that's expected
+      # In that case, manually delete remaining resources
       serviceAccountName: {{ include "kube-freezer.serviceAccountName" . }}
       restartPolicy: OnFailure
       containers:
@@ -27,7 +31,8 @@ spec:
         - /bin/bash
         - -c
         - |
-          set -e
+          # Don't use set -e - we want to continue even if some deletions fail
+          set -x  # Enable debug output for troubleshooting
           
           NAMESPACE="{{ include "kube-freezer.namespace" . }}"
           RELEASE_NAME="{{ .Release.Name }}"
@@ -37,27 +42,45 @@ spec:
           
           # Wait a moment for Helm to finish deleting managed resources
           echo "⏳ Waiting for Helm to finish deleting managed resources..."
-          sleep 5
+          sleep 3
           
-          # Delete all secrets (including TLS and API keys)
+          # Check if namespace exists
+          if ! kubectl get namespace "${NAMESPACE}" &>/dev/null; then
+            echo "   Namespace '${NAMESPACE}' already deleted, nothing to clean up."
+            exit 0
+          fi
+          
+          # Delete specific secrets by name (more reliable than --all)
           echo "🗑️  Deleting secrets..."
-          kubectl delete secrets -n "${NAMESPACE}" --all --ignore-not-found=true || true
+          for secret in kube-freezer-tls kube-freezer-api-keys; do
+            if kubectl delete secret "${secret}" -n "${NAMESPACE}" --ignore-not-found=true 2>&1; then
+              echo "   ✅ Deleted secret: ${secret}"
+            else
+              echo "   ⚠️  Failed to delete secret: ${secret}"
+            fi
+          done
           
-          # Delete all ConfigMaps (including schedules, notifications, templates)
+          # Delete specific ConfigMaps by name (these are not managed by Helm)
           echo "🗑️  Deleting ConfigMaps..."
-          kubectl delete configmaps -n "${NAMESPACE}" --all --ignore-not-found=true || true
+          for cm in kube-freezer-exemptions kube-freezer-schedules kube-freezer-notifications kube-freezer-templates; do
+            if kubectl delete configmap "${cm}" -n "${NAMESPACE}" --ignore-not-found=true 2>&1; then
+              echo "   ✅ Deleted configmap: ${cm}"
+            else
+              echo "   ⚠️  Failed to delete configmap: ${cm}"
+            fi
+          done
           
-          # Delete any remaining jobs
+          # Delete any remaining jobs (except this one)
           echo "🗑️  Deleting jobs..."
-          kubectl delete jobs -n "${NAMESPACE}" --all --ignore-not-found=true || true
+          kubectl delete jobs -n "${NAMESPACE}" --ignore-not-found=true --field-selector metadata.name!=${RELEASE_NAME}-cleanup || true
           
           # Delete any remaining pods (orphaned pods)
           echo "🗑️  Deleting pods..."
-          kubectl delete pods -n "${NAMESPACE}" --all --ignore-not-found=true || true
+          kubectl delete pods -n "${NAMESPACE}" --all --ignore-not-found=true 2>/dev/null || true
           
           # Delete PVCs if any
           echo "🗑️  Deleting PVCs..."
-          kubectl delete pvc -n "${NAMESPACE}" --all --ignore-not-found=true || true
+          kubectl delete pvc -n "${NAMESPACE}" --all --ignore-not-found=true 2>/dev/null || true
           
           # Delete the namespace itself
           echo "🗑️  Deleting namespace '${NAMESPACE}'..."
