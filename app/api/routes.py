@@ -456,6 +456,19 @@ async def create_exemption(
         except Exception as hist_error:
             logger.warning(f"Failed to save history event: {hist_error}", exc_info=True)
         
+        # Send notification (Phase 4)
+        notif_mgr = get_notification_manager()
+        if notif_mgr:
+            await notif_mgr.send_notification("exemption_created", {
+                "exemption_id": exemption.id,
+                "namespace": request.namespace,
+                "resource_name": request.resource_name,
+                "duration_minutes": request.duration_minutes,
+                "reason": request.reason,
+                "approved_by": request.approved_by,
+                "expires_at": exemption.expires_at.isoformat()
+            })
+        
         duration = time.time() - start_time
         record_api_request("/freeze/exemptions", "POST", 201, duration)
         

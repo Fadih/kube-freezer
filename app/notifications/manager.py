@@ -38,24 +38,63 @@ class SlackProvider(NotificationProvider):
             logger.warning("Slack webhook_url not configured")
             return False
         
-        channels = self.config.get("channels", ["#general"])
-        
         try:
             message = self._format_message(event_type, data)
             
-            for channel in channels:
-                payload = {
-                    "channel": channel,
-                    "text": message.get("text", ""),
-                    "blocks": message.get("blocks", [])
-                }
+            # Build payload - Slack webhook format
+            payload = {
+                "text": message.get("text", ""),
+            }
+            
+            # Add blocks if available (richer formatting)
+            if message.get("blocks"):
+                payload["blocks"] = message.get("blocks")
+            
+            # Optional: override channel (only works if webhook has permission)
+            # Channels are typically set when creating the webhook URL
+            channel = self.config.get("channel")
+            if channel:
+                payload["channel"] = channel
+            
+            # Optional: username override
+            username = self.config.get("username")
+            if username:
+                payload["username"] = username
+            
+            # Optional: icon override
+            icon_emoji = self.config.get("icon_emoji")
+            if icon_emoji:
+                payload["icon_emoji"] = icon_emoji
+            elif self.config.get("icon_url"):
+                payload["icon_url"] = self.config.get("icon_url")
+            
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(webhook_url, json=payload)
+                response.raise_for_status()
                 
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    response = await client.post(webhook_url, json=payload)
-                    response.raise_for_status()
+                # Slack webhooks return "ok" as plain text or JSON {"ok": true/false}
+                try:
+                    response_text = response.text.strip()
+                    if response_text == "ok":
+                        # Success - Slack returned plain text "ok"
+                        pass
+                    else:
+                        # Try to parse as JSON
+                        response_data = response.json()
+                        if response_data.get("ok") is False:
+                            error = response_data.get("error", "Unknown error")
+                            logger.error(f"Slack API error: {error}")
+                            return False
+                except Exception:
+                    # If response parsing fails but status is 200, assume success
+                    # Slack webhooks can return various formats
+                    pass
             
             logger.info(f"Slack notification sent for {event_type}")
             return True
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error sending Slack notification: {e.response.status_code} - {e.response.text}", exc_info=True)
+            return False
         except Exception as e:
             logger.error(f"Error sending Slack notification: {e}", exc_info=True)
             return False
@@ -155,11 +194,101 @@ class SlackProvider(NotificationProvider):
                 "text": "⏰ Freeze Schedule Reminder",
                 "blocks": [
                     {
-                        "type": "section",
+                        "type": "header",
                         "text": {
-                            "type": "mrkdwn",
-                            "text": f"⏰ *Freeze schedule will activate soon*\n*Window:* {data.get('freeze_window', 'N/A')}\n*Starts:* {data.get('starts_at', 'N/A')}"
+                            "type": "plain_text",
+                            "text": "⏰ Freeze Schedule Reminder"
                         }
+                    },
+                    {
+                        "type": "section",
+                        "fields": [
+                            {
+                                "type": "mrkdwn",
+                                "text": f"*Window:* {data.get('freeze_window', 'N/A')}"
+                            },
+                            {
+                                "type": "mrkdwn",
+                                "text": f"*Starts:* {data.get('starts_at', 'N/A')}"
+                            }
+                        ]
+                    }
+                ]
+            }
+        elif event_type == "schedule_removed":
+            return {
+                "text": "🗑️ Freeze Schedule Removed",
+                "blocks": [
+                    {
+                        "type": "header",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "🗑️ Freeze Schedule Removed"
+                        }
+                    },
+                    {
+                        "type": "section",
+                        "fields": [
+                            {
+                                "type": "mrkdwn",
+                                "text": f"*Schedule:* {data.get('schedule_name', 'N/A')}"
+                            },
+                            {
+                                "type": "mrkdwn",
+                                "text": f"*Reason:* {data.get('reason', 'N/A')}"
+                            }
+                        ]
+                    }
+                ]
+            }
+        elif event_type == "exemption_created":
+            resource_info = data.get('namespace', 'N/A')
+            if data.get('resource_name'):
+                resource_info += f"/{data.get('resource_name')}"
+            
+            duration_hours = data.get('duration_minutes', 0) / 60
+            duration_str = f"{data.get('duration_minutes', 0)} min"
+            if duration_hours >= 1:
+                duration_str = f"{duration_hours:.1f} hours" if duration_hours > 1 else "1 hour"
+            
+            return {
+                "text": "✅ Exemption Created",
+                "blocks": [
+                    {
+                        "type": "header",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "✅ Exemption Created"
+                        }
+                    },
+                    {
+                        "type": "section",
+                        "fields": [
+                            {
+                                "type": "mrkdwn",
+                                "text": f"*Exemption ID:* `{data.get('exemption_id', 'N/A')[:8]}...`"
+                            },
+                            {
+                                "type": "mrkdwn",
+                                "text": f"*Resource:* {resource_info}"
+                            },
+                            {
+                                "type": "mrkdwn",
+                                "text": f"*Duration:* {duration_str}"
+                            },
+                            {
+                                "type": "mrkdwn",
+                                "text": f"*Expires:* {data.get('expires_at', 'N/A')}"
+                            },
+                            {
+                                "type": "mrkdwn",
+                                "text": f"*Approved By:* {data.get('approved_by', 'N/A')}"
+                            },
+                            {
+                                "type": "mrkdwn",
+                                "text": f"*Reason:* {data.get('reason', 'N/A')}"
+                            }
+                        ]
                     }
                 ]
             }
@@ -176,141 +305,6 @@ class SlackProvider(NotificationProvider):
                     }
                 ]
             }
-
-
-class EmailProvider(NotificationProvider):
-    """Email notification provider"""
-    
-    async def send(self, event_type: str, data: Dict[str, Any]) -> bool:
-        """Send email notification"""
-        if not self.enabled:
-            return False
-        
-        if event_type not in self.events:
-            return False
-        
-        # For Phase 4, we'll use a simple SMTP approach
-        # In production, consider using a service like SendGrid, SES, etc.
-        try:
-            import smtplib
-            from email.mime.text import MIMEText
-            from email.mime.multipart import MIMEMultipart
-            
-            smtp_server = self.config.get("smtp_server")
-            smtp_port = self.config.get("smtp_port", 587)
-            smtp_user = self.config.get("smtp_user")
-            smtp_password = self.config.get("smtp_password")
-            from_email = self.config.get("from", "kubefreezer@company.com")
-            to_emails = self.config.get("to", [])
-            
-            if not smtp_server or not to_emails:
-                logger.warning("Email configuration incomplete")
-                return False
-            
-            subject = self._get_subject(event_type)
-            body = self._format_email_body(event_type, data)
-            
-            msg = MIMEMultipart()
-            msg["From"] = from_email
-            msg["To"] = ", ".join(to_emails)
-            msg["Subject"] = subject
-            msg.attach(MIMEText(body, "html"))
-            
-            # Note: This is synchronous SMTP, consider async SMTP library for production
-            with smtplib.SMTP(smtp_server, smtp_port) as server:
-                if smtp_user and smtp_password:
-                    server.starttls()
-                    server.login(smtp_user, smtp_password)
-                server.send_message(msg)
-            
-            logger.info(f"Email notification sent for {event_type}")
-            return True
-        except Exception as e:
-            logger.error(f"Error sending email notification: {e}", exc_info=True)
-            return False
-    
-    def _get_subject(self, event_type: str) -> str:
-        """Get email subject"""
-        subjects = {
-            "freeze_enabled": "🚫 KubeFreezer: Deployment Freeze Activated",
-            "freeze_disabled": "✅ KubeFreezer: Deployment Freeze Disabled",
-            "violation": "⚠️ KubeFreezer: Deployment Blocked During Freeze",
-            "schedule_reminder": "⏰ KubeFreezer: Freeze Schedule Reminder"
-        }
-        return subjects.get(event_type, f"KubeFreezer: {event_type}")
-    
-    def _format_email_body(self, event_type: str, data: Dict[str, Any]) -> str:
-        """Format email body as HTML"""
-        if event_type == "freeze_enabled":
-            return f"""
-            <html>
-            <body>
-                <h2>🚫 Deployment Freeze Activated</h2>
-                <p><strong>Freeze Window:</strong> {data.get('freeze_window', 'Manual Freeze')}</p>
-                <p><strong>Until:</strong> {data.get('until', 'N/A')}</p>
-                <p><strong>Namespace:</strong> {data.get('namespace', 'All')}</p>
-                <p><strong>Reason:</strong> {data.get('reason', 'N/A')}</p>
-            </body>
-            </html>
-            """
-        elif event_type == "freeze_disabled":
-            return f"""
-            <html>
-            <body>
-                <h2>✅ Deployment Freeze Disabled</h2>
-                <p><strong>Reason:</strong> {data.get('reason', 'N/A')}</p>
-            </body>
-            </html>
-            """
-        elif event_type == "violation":
-            return f"""
-            <html>
-            <body>
-                <h2>⚠️ Deployment Blocked During Freeze</h2>
-                <p><strong>Resource:</strong> {data.get('resource', 'N/A')}</p>
-                <p><strong>Namespace:</strong> {data.get('namespace', 'N/A')}</p>
-                <p><strong>User:</strong> {data.get('user', 'N/A')}</p>
-                <p><strong>Freeze Window:</strong> {data.get('freeze_window', 'N/A')}</p>
-            </body>
-            </html>
-            """
-        else:
-            return f"<html><body><h2>KubeFreezer Event: {event_type}</h2><pre>{data}</pre></body></html>"
-
-
-class WebhookProvider(NotificationProvider):
-    """Generic webhook provider"""
-    
-    async def send(self, event_type: str, data: Dict[str, Any]) -> bool:
-        """Send webhook notification"""
-        if not self.enabled:
-            return False
-        
-        if event_type not in self.events:
-            return False
-        
-        webhook_url = self.config.get("url")
-        if not webhook_url:
-            logger.warning("Webhook URL not configured")
-            return False
-        
-        try:
-            headers = self.config.get("headers", {})
-            payload = {
-                "event_type": event_type,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "data": data
-            }
-            
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(webhook_url, json=payload, headers=headers)
-                response.raise_for_status()
-            
-            logger.info(f"Webhook notification sent for {event_type}")
-            return True
-        except Exception as e:
-            logger.error(f"Error sending webhook notification: {e}", exc_info=True)
-            return False
 
 
 class NotificationManager:
@@ -341,12 +335,8 @@ class NotificationManager:
             
             if provider_type == "slack":
                 self.providers.append(SlackProvider(provider_config))
-            elif provider_type == "email":
-                self.providers.append(EmailProvider(provider_config))
-            elif provider_type == "webhook":
-                self.providers.append(WebhookProvider(provider_config))
             else:
-                logger.warning(f"Unknown notification provider type: {provider_type}")
+                logger.warning(f"Unsupported notification provider type: {provider_type}. Only 'slack' is supported.")
     
     async def send_notification(self, event_type: str, data: Dict[str, Any]):
         """Send notification to all configured providers"""

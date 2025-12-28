@@ -144,31 +144,25 @@ webhook:
 networkPolicy:
   enabled: false  # Disabled - user prefers no network restrictions
 
-# Notifications
+# Notifications (Slack only)
 notifications:
   enabled: false
   providers: []
-  # Example:
+  # Example Slack configuration:
   # providers:
   #   - type: slack
-  #     webhook_url: "https://hooks.slack.com/services/..."
-  #     channels:
-  #       - "#deployments"
+  #     enabled: true
+  #     webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+  #     channel: "#deployments"  # Optional: override default channel (requires webhook permission)
+  #     username: "KubeFreezer"  # Optional: override bot username
+  #     icon_emoji: ":lock:"  # Optional: override bot icon emoji
   #     events:
   #       - freeze_enabled
   #       - freeze_disabled
   #       - violation
-  #   - type: email
-  #     smtp_server: "smtp.company.com"
-  #     smtp_port: 587
-  #     smtp_user: "${SMTP_USER}"
-  #     smtp_password: "${SMTP_PASSWORD}"
-  #     from: "kubefreezer@company.com"
-  #     to:
-  #       - "oncall@company.com"
-  #     events:
-  #       - violation
-  #       - freeze_enabled
+  #       - schedule_reminder
+  #       - schedule_removed
+  #       - exemption_created
 
 # All templates must be configured here - no built-in templates
 # Now using cron expressions for simpler and more flexible scheduling
