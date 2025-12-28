@@ -13,6 +13,7 @@ KubeFreezer acts as a gatekeeper for your Kubernetes cluster, intercepting all d
 - ✅ **Multiple Bypass Mechanisms** - Flexible options for emergency deployments
 - ✅ **REST API** - Enable/disable freeze programmatically
 - ✅ **Real-time Configuration** - ConfigMap changes take effect without restart
+- ✅ **Slack Notifications** - Real-time alerts for freeze events, violations, and exemptions
 - ✅ **ArgoCD Compatible** - Works seamlessly with GitOps workflows
 - ✅ **Web UI** - User-friendly interface for managing freezes
 - ✅ **Audit Logging** - Track all freeze events and bypass usage
@@ -38,8 +39,8 @@ helm repo update
 helm install kube-freezer kube-freezer/kube-freezer \
   --namespace kube-freezer \
   --create-namespace \
-  --set backend.image.tag=1.2.0 \
-  --set frontend.image.tag=1.2.0
+  --set backend.image.tag=1.2.6 \
+  --set frontend.image.tag=1.2.6
 ```
 
 Replace `1.2.0` with the version you want to install (check [releases](https://github.com/Fadih/kube-freezer/releases) for available versions).
@@ -153,6 +154,141 @@ kubectl port-forward -n kube-freezer svc/kube-freezer-frontend 8080:80
 ```
 
 Then open http://localhost:8080 in your browser.
+
+## 📢 Slack Notifications
+
+KubeFreezer can send real-time notifications to Slack when freeze events occur. This helps keep your team informed about freeze status, violations, and exemptions.
+
+### Configuration
+
+Slack notifications are configured via a ConfigMap and enabled through Helm values.
+
+**1. Configure via Helm values.yaml:**
+
+```yaml
+notifications:
+  enabled: true
+  providers:
+    - type: slack
+      enabled: true
+      webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+      channel: "#deployments"  # Optional: override default channel
+      username: "KubeFreezer"  # Optional: override bot username
+      icon_emoji: ":lock:"     # Optional: override bot icon emoji
+      events:
+        - freeze_enabled
+        - freeze_disabled
+        - violation
+        - schedule_reminder
+        - schedule_removed
+        - exemption_created
+```
+
+**2. Create/Update the ConfigMap:**
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kube-freezer-notifications
+  namespace: kube-freezer
+data:
+  enabled: "true"
+  providers: |
+    - type: slack
+      enabled: true
+      webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+      channel: "#deployments"
+      username: "KubeFreezer"
+      icon_emoji: ":lock:"
+      events:
+        - freeze_enabled
+        - freeze_disabled
+        - violation
+        - schedule_reminder
+        - schedule_removed
+        - exemption_created
+EOF
+```
+
+### Getting a Slack Webhook URL
+
+1. Go to https://api.slack.com/apps
+2. Create a new app or select an existing app
+3. Navigate to **Incoming Webhooks** in the features section
+4. Activate incoming webhooks
+5. Click **Add New Webhook to Workspace**
+6. Select the channel where notifications should be sent
+7. Copy the webhook URL (starts with `https://hooks.slack.com/services/...`)
+
+### Supported Events
+
+- **`freeze_enabled`** - Sent when a deployment freeze is activated
+- **`freeze_disabled`** - Sent when a deployment freeze is disabled
+- **`violation`** - Sent when a deployment is blocked during a freeze
+- **`schedule_reminder`** - Sent as a reminder before a scheduled freeze activates
+- **`schedule_removed`** - Sent when a freeze schedule is removed
+- **`exemption_created`** - Sent when a temporary exemption is created
+
+### Notification Format
+
+Notifications use Slack's Block Kit for rich formatting and include relevant details:
+
+- **Freeze Enabled**: Freeze window, expiration time, namespace, and reason
+- **Freeze Disabled**: Reason for disabling
+- **Violation**: Resource details, namespace, user, and freeze window
+- **Exemption Created**: Exemption ID, resource, duration, approved by, expiration, and reason
+- **Schedule Events**: Schedule name, start time, and related details
+
+### Testing Notifications
+
+After configuring Slack notifications, test them by:
+
+```bash
+# Get your API key
+API_KEY=$(kubectl get secret kube-freezer-api-keys -n kube-freezer \
+  -o jsonpath='{.data.api_key_admin}' | base64 -d)
+
+# Enable a freeze (should trigger freeze_enabled notification)
+curl -k -X POST https://kube-freezer-backend.kube-freezer.svc/api/v1/freeze/enable \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "freeze_until": "2025-12-31T23:59:59Z",
+    "reason": "Testing Slack notifications"
+  }'
+```
+
+Check your Slack channel to verify the notification was received.
+
+### Troubleshooting
+
+**Notifications not being sent:**
+
+1. Verify the ConfigMap exists and is correctly formatted:
+   ```bash
+   kubectl get configmap kube-freezer-notifications -n kube-freezer -o yaml
+   ```
+
+2. Check backend logs for notification errors:
+   ```bash
+   kubectl logs -n kube-freezer -l app.kubernetes.io/name=kube-freezer,component=backend | grep -i notification
+   ```
+
+3. Verify the webhook URL is correct and accessible from the cluster
+
+4. Ensure the event type is included in the `events` list for your Slack provider
+
+5. Check that notifications are enabled:
+   ```bash
+   kubectl get configmap kube-freezer-notifications -n kube-freezer \
+     -o jsonpath='{.data.enabled}'
+   ```
+
+**Rate Limiting:**
+
+Notifications are rate-limited to prevent spam (max 1 notification per event type per namespace per minute). This prevents notification flooding during high-volume events.
 
 ## 🔓 Bypass Mechanisms
 
