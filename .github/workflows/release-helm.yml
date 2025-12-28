@@ -157,41 +157,47 @@ jobs:
           REPO_NAME="${{ github.repository }}"
           REPO_URL="https://${REPO_OWNER}.github.io/kube-freezer"
           
-          cat > ./pages/index.html << EOF
-          <!DOCTYPE html>
+          REPO_OWNER="${REPO_OWNER}" REPO_NAME="${REPO_NAME}" REPO_URL="${REPO_URL}" python3 << 'PYTHON_SCRIPT'
+          import os
+          
+          repo_owner = os.environ.get('REPO_OWNER', 'Fadih')
+          repo_name = os.environ.get('REPO_NAME', 'Fadih/kube-freezer')
+          repo_url = os.environ.get('REPO_URL', f'https://{repo_owner}.github.io/kube-freezer')
+          
+          html_content = f'''<!DOCTYPE html>
           <html lang="en">
           <head>
               <meta charset="UTF-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
               <title>KubeFreezer Documentation</title>
               <style>
-                  body {
+                  body {{
                       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
                       line-height: 1.6;
                       max-width: 1200px;
                       margin: 0 auto;
                       padding: 20px;
                       background: #f5f5f5;
-                  }
-                  .container {
+                  }}
+                  .container {{
                       background: white;
                       padding: 40px;
                       border-radius: 8px;
                       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                  }
-                  h1 {
+                  }}
+                  h1 {{
                       color: #2c3e50;
                       border-bottom: 3px solid #3498db;
                       padding-bottom: 10px;
-                  }
-                  h2 {
+                  }}
+                  h2 {{
                       color: #34495e;
                       margin-top: 30px;
-                  }
-                  .section {
+                  }}
+                  .section {{
                       margin: 30px 0;
-                  }
-                  .doc-link {
+                  }}
+                  .doc-link {{
                       display: block;
                       padding: 12px;
                       margin: 8px 0;
@@ -201,29 +207,29 @@ jobs:
                       color: #2c3e50;
                       border-radius: 4px;
                       transition: background 0.3s;
-                  }
-                  .doc-link:hover {
+                  }}
+                  .doc-link:hover {{
                       background: #d5dbdb;
-                  }
-                  .helm-repo {
+                  }}
+                  .helm-repo {{
                       background: #e8f5e9;
                       padding: 20px;
                       border-radius: 8px;
                       margin: 20px 0;
-                  }
-                  code {
+                  }}
+                  code {{
                       background: #f4f4f4;
                       padding: 2px 6px;
                       border-radius: 3px;
                       font-family: 'Courier New', monospace;
-                  }
-                  pre {
+                  }}
+                  pre {{
                       background: #2c3e50;
                       color: #ecf0f1;
                       padding: 15px;
                       border-radius: 5px;
                       overflow-x: auto;
-                  }
+                  }}
               </style>
           </head>
           <body>
@@ -237,12 +243,12 @@ jobs:
                   <div class="helm-repo">
                       <h2>📦 Helm Chart Repository</h2>
                       <p>Add the Helm repository:</p>
-                      <pre>helm repo add kube-freezer ${REPO_URL}
-helm repo update</pre>
+                      <pre>helm repo add kube-freezer {repo_url}
+          helm repo update</pre>
                       <p>Install:</p>
                       <pre>helm install kube-freezer kube-freezer/kube-freezer \\
-  --namespace kube-freezer \\
-  --create-namespace</pre>
+            --namespace kube-freezer \\
+            --create-namespace</pre>
                   </div>
                   
                   <div class="section">
@@ -260,14 +266,17 @@ helm repo update</pre>
                   <div class="section">
                       <h2>🔗 Links</h2>
                       <p>
-                          <a href="https://github.com/${REPO_NAME}">GitHub Repository</a> | 
+                          <a href="https://github.com/{repo_name}">GitHub Repository</a> | 
                           <a href="charts/index.yaml">Helm Chart Index</a>
                       </p>
                   </div>
               </div>
           </body>
-          </html>
-          EOF
+          </html>'''
+          
+          with open('./pages/index.html', 'w') as f:
+              f.write(html_content)
+          PYTHON_SCRIPT
           echo "✅ Documentation prepared for Pages"
           ls -la ./pages/
 
