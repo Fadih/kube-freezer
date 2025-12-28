@@ -114,9 +114,10 @@ function ApplyTemplateModal({ template, onClose, onSuccess }: ApplyTemplateModal
           throw new Error('End date and time are required');
         }
 
-      // Build start and end ISO strings
-        const startDateTime = new Date(`${startDate}T${startTime}:00Z`);
-        const endDateTime = new Date(`${endDate}T${endTime}:00Z`);
+      // Build start and end ISO strings from local time
+        // Create Date objects in local timezone (no 'Z' suffix means local time)
+        const startDateTime = new Date(`${startDate}T${startTime}:00`);
+        const endDateTime = new Date(`${endDate}T${endTime}:00`);
 
         if (isNaN(startDateTime.getTime())) {
         throw new Error('Invalid start date/time values');
@@ -289,7 +290,7 @@ function ApplyTemplateModal({ template, onClose, onSuccess }: ApplyTemplateModal
               </div>
           
           <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
-            <p>💡 <strong>Date Range:</strong> The cron expression will run between the start and end dates/times above. All times are in UTC.</p>
+            <p>💡 <strong>Date Range:</strong> The cron expression will run between the start and end dates/times above. All times are in your local timezone.</p>
           </div>
 
           {/* Namespaces */}
