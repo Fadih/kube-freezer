@@ -34,8 +34,9 @@ class Exemption:
         return datetime.now(timezone.utc) >= self.expires_at
     
     def is_valid(self) -> bool:
-        """Check if exemption is valid (not expired and not used)"""
-        return not self.is_expired() and not self.used
+        """Check if exemption is valid (not expired)"""
+        # Exemptions remain valid for their entire duration and can be used multiple times
+        return not self.is_expired()
 
 
 class ExemptionManager:

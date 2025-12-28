@@ -136,9 +136,10 @@ async def handle_admission_review(
             
             exemption = await exemption_manager.check_exemption(namespace, resource_name)
             if exemption and exemption.is_valid():
-                await exemption_manager.use_exemption(exemption.id)
+                # Exemptions remain valid for their entire duration and can be used multiple times
+                # We don't mark them as used anymore - they stay valid until expiration
                 
-                # Record history event for exemption usage
+                # Record history event for exemption usage (for audit purposes only)
                 try:
                     from app.api.routes import get_history_tracker
                     tracker = get_history_tracker()
