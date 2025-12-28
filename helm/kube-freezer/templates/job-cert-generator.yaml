@@ -50,10 +50,12 @@ spec:
             -subj "/CN=${SERVICE_NAME}.${NAMESPACE}.svc"
           
           # Generate self-signed certificate with proper SANs
+          # Using 99 years expiration (maximum practical limit for most systems)
+          # This is effectively "never expire" for operational purposes
           openssl x509 -req -in "${CERT_DIR}/tls.csr" \
             -signkey "${CERT_DIR}/tls.key" \
             -out "${CERT_DIR}/tls.crt" \
-            -days 365 \
+            -days 36500 \
             -extensions v3_req \
             -extfile <(
               cat <<EOF

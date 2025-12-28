@@ -23,10 +23,11 @@ openssl req -new -key "${CERT_DIR}/tls.key" \
   -subj "/CN=${SERVICE_NAME}.${NAMESPACE}.svc"
 
 # Generate self-signed certificate with proper SANs
+# Using 36500 days (~100 years) - effectively "never expire" for operational purposes
 openssl x509 -req -in "${CERT_DIR}/tls.csr" \
   -signkey "${CERT_DIR}/tls.key" \
   -out "${CERT_DIR}/tls.crt" \
-  -days 365 \
+  -days 36500 \
   -extensions v3_req \
   -extfile <(
     cat <<EOF
