@@ -1,0 +1,51 @@
+{{- if .Values.backend.enabled }}
+{{- $namespace := include "kube-freezer.namespace" . }}
+{{- $releaseName := .Release.Name }}
+{{- $backendService := include "kube-freezer.fullname" . }}-backend
+{{- $frontendService := include "kube-freezer.fullname" . }}-frontend
+================================================================================
+🎉 KubeFreezer has been installed successfully!
+================================================================================
+
+📋 Release Information:
+   Release Name: {{ $releaseName }}
+   Namespace:    {{ $namespace }}
+   Chart Version: {{ .Chart.Version }}
+   App Version:   {{ .Chart.AppVersion }}
+
+🔐 API Key:
+   An API key has been automatically generated and stored in a Secret.
+   
+   To retrieve your API key, run:
+   
+   kubectl get secret kube-freezer-api-keys -n {{ $namespace }} \
+     -o jsonpath='{.data.api_key_admin}' | base64 -d && echo
+   
+   ⚠️  Save this key securely - you'll need it to authenticate API requests!
+
+🌐 Accessing the Services:
+   
+
+   Frontend UI (HTTP):
+   - Service: {{ $frontendService }}.{{ $namespace }}.svc.cluster.local:80
+   - Port-forward: kubectl port-forward -n {{ $namespace }} svc/{{ $frontendService }} 8080:80
+   - Then access: http://localhost:8080
+
+📊 Check Status:
+   kubectl get pods -n {{ $namespace }}
+   kubectl get svc -n {{ $namespace }}
+
+🔧 Configuration:
+   - ConfigMap: kubectl get configmap {{ include "kube-freezer.fullname" . }}-config -n {{ $namespace }}
+   - View config: kubectl get configmap {{ include "kube-freezer.fullname" . }}-config -n {{ $namespace }} -o yaml
+
+📚 Documentation:
+   - API Documentation: See docs/API_KEYS.md
+   - Authentication: See docs/AUTHENTICATION.md
+   - Troubleshooting: See docs/TROUBLESHOOTING.md
+
+
+
+================================================================================
+{{- end }}
+
