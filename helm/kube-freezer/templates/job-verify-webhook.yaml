@@ -1,0 +1,134 @@
+{{- if and (not .Values.certificate.useCertManager) (not .Values.certificate.manual) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "kube-freezer.fullname" . }}-verify-webhook
+  namespace: {{ include "kube-freezer.namespace" . }}
+  labels:
+    {{- include "kube-freezer.labels" . | nindent 4 }}
+  annotations:
+    # Run after webhook is created to ensure CA bundle is set
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "kube-freezer.selectorLabels" . | nindent 8 }}
+        component: verify-webhook
+    spec:
+      serviceAccountName: {{ include "kube-freezer.serviceAccountName" . }}
+      restartPolicy: OnFailure
+      containers:
+      - name: verify
+        image: {{ .Values.certificate.generatorImage | default "bitnami/kubectl:latest" }}
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          
+          NAMESPACE="{{ include "kube-freezer.namespace" . }}"
+          SECRET_NAME="{{ include "kube-freezer.fullname" . }}-tls"
+          WEBHOOK_NAME="{{ include "kube-freezer.fullname" . }}"
+          
+          echo "🔍 Verifying webhook CA bundle configuration..."
+          echo ""
+          
+          # Wait for webhook to exist
+          echo "⏳ Waiting for ValidatingWebhookConfiguration to be created..."
+          MAX_WAIT=30
+          WAIT_COUNT=0
+          while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+            if kubectl get validatingwebhookconfiguration "${WEBHOOK_NAME}" &>/dev/null; then
+              echo "   ✅ ValidatingWebhookConfiguration found"
+              break
+            fi
+            WAIT_COUNT=$((WAIT_COUNT + 1))
+            if [ $WAIT_COUNT -lt $MAX_WAIT ]; then
+              sleep 1
+            fi
+          done
+          
+          if [ $WAIT_COUNT -eq $MAX_WAIT ]; then
+            echo "   ❌ ValidatingWebhookConfiguration not found after ${MAX_WAIT}s"
+            exit 1
+          fi
+          
+          # Get CA bundle from secret
+          CA_BUNDLE=$(kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" \
+            -o jsonpath='{.data.tls\.crt}' 2>/dev/null || echo "")
+          
+          if [ -z "$CA_BUNDLE" ]; then
+            echo "   ❌ TLS secret not found or empty!"
+            exit 1
+          fi
+          
+          # Check current CA bundle in webhook
+          CURRENT_CA=$(kubectl get validatingwebhookconfiguration "${WEBHOOK_NAME}" \
+            -o jsonpath='{.webhooks[0].clientConfig.caBundle}' 2>/dev/null || echo "")
+          
+          if [ -z "$CURRENT_CA" ] || [ "$CURRENT_CA" = "" ]; then
+            echo "   ⚠️  CA bundle is empty in ValidatingWebhookConfiguration"
+            echo "   🔧 Updating CA bundle..."
+            
+            # Update with retry logic
+            MAX_RETRIES=5
+            RETRY_COUNT=0
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+              if kubectl patch validatingwebhookconfiguration "${WEBHOOK_NAME}" \
+                --type='json' \
+                -p="[{\"op\": \"replace\", \"path\": \"/webhooks/0/clientConfig/caBundle\", \"value\":\"${CA_BUNDLE}\"}]" 2>/dev/null; then
+                echo "   ✅ CA bundle updated successfully!"
+                break
+              else
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+                if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                  echo "   ⏳ Retrying... (attempt $RETRY_COUNT/$MAX_RETRIES)"
+                  sleep 2
+                else
+                  echo "   ❌ Failed to update CA bundle after $MAX_RETRIES attempts"
+                  exit 1
+                fi
+              fi
+            done
+          elif [ "$CURRENT_CA" = "$CA_BUNDLE" ]; then
+            echo "   ✅ CA bundle is correctly set in ValidatingWebhookConfiguration"
+          else
+            echo "   ⚠️  CA bundle mismatch between secret and webhook"
+            echo "   🔧 Updating CA bundle to match secret..."
+            kubectl patch validatingwebhookconfiguration "${WEBHOOK_NAME}" \
+              --type='json' \
+              -p="[{\"op\": \"replace\", \"path\": \"/webhooks/0/clientConfig/caBundle\", \"value\":\"${CA_BUNDLE}\"}]"
+            echo "   ✅ CA bundle updated!"
+          fi
+          
+          # Verify the update
+          VERIFIED_CA=$(kubectl get validatingwebhookconfiguration "${WEBHOOK_NAME}" \
+            -o jsonpath='{.webhooks[0].clientConfig.caBundle}' 2>/dev/null || echo "")
+          
+          if [ "$VERIFIED_CA" = "$CA_BUNDLE" ]; then
+            echo ""
+            echo "✅ Webhook verification complete - CA bundle is correctly configured!"
+          else
+            echo ""
+            echo "❌ Webhook verification failed - CA bundle mismatch"
+            exit 1
+          fi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          runAsNonRoot: true
+          runAsUser: 1000
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+{{- end }}
+

@@ -157,11 +157,28 @@ spec:
           
           WEBHOOK_NAME="{{ include "kube-freezer.fullname" . }}"
           
+          # Update ValidatingWebhookConfiguration with CA bundle (with retries)
           echo "   Updating ValidatingWebhookConfiguration with CA bundle..."
-          kubectl patch validatingwebhookconfiguration "${WEBHOOK_NAME}" \
-            --type='json' \
-            -p="[{\"op\": \"replace\", \"path\": \"/webhooks/0/clientConfig/caBundle\", \"value\":\"${CA_BUNDLE}\"}]" || \
-          echo "   Warning: ValidatingWebhookConfiguration not found yet, will be updated after webhook is created"
+          MAX_RETRIES=10
+          RETRY_COUNT=0
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            if kubectl patch validatingwebhookconfiguration "${WEBHOOK_NAME}" \
+              --type='json' \
+              -p="[{\"op\": \"replace\", \"path\": \"/webhooks/0/clientConfig/caBundle\", \"value\":\"${CA_BUNDLE}\"}]" 2>/dev/null; then
+              echo "   ✅ CA bundle updated successfully in ValidatingWebhookConfiguration"
+              break
+            else
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                echo "   ⏳ Waiting for ValidatingWebhookConfiguration... (attempt $RETRY_COUNT/$MAX_RETRIES)"
+                sleep 2
+              else
+                echo "   ⚠️  Warning: Could not update ValidatingWebhookConfiguration after $MAX_RETRIES attempts"
+                echo "   The webhook may need to be updated manually:"
+                echo "   kubectl patch validatingwebhookconfiguration ${WEBHOOK_NAME} --type='json' -p='[{\"op\": \"replace\", \"path\": \"/webhooks/0/clientConfig/caBundle\", \"value\":\"${CA_BUNDLE}\"}]'"
+              fi
+            fi
+          done
           
           echo "✅ Certificate generated and applied successfully!"
           
