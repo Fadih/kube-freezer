@@ -1,7 +1,9 @@
 # Default values for kube-freezer
 # Namespace configuration
 namespace: kube-freezer
-createNamespace: true
+# Set to false when using Helm's --create-namespace flag to avoid conflicts
+# The namespace template will only create the namespace if this is true AND --create-namespace is not used
+createNamespace: false
 
 # Backend configuration
 backend:

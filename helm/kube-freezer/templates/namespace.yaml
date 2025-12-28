@@ -1,4 +1,7 @@
 {{- if .Values.createNamespace }}
+# NOTE: This template creates the namespace. 
+# If you use Helm's --create-namespace flag, set createNamespace: false in values.yaml
+# to avoid conflicts (Helm will create the namespace automatically).
 apiVersion: v1
 kind: Namespace
 metadata:
