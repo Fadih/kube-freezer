@@ -5,6 +5,11 @@ metadata:
   namespace: {{ include "kube-freezer.namespace" . }}
   labels:
     {{- include "kube-freezer.labels" . | nindent 4 }}
+  annotations:
+    # Ensure Role is created before cert-generator Job
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-9"
+    "helm.sh/hook-delete-policy": before-hook-creation
 rules:
   # Allow creating ConfigMaps in namespace (resourceNames restriction doesn't work for CREATE on non-existent resources)
   # This is namespace-scoped, so it only applies to this namespace, which is safe

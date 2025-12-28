@@ -85,10 +85,10 @@ spec:
               -p="[{\"op\": \"replace\", \"path\": \"/data/tls.crt\", \"value\":\"${TLS_CRT}\"}, {\"op\": \"replace\", \"path\": \"/data/tls.key\", \"value\":\"${TLS_KEY}\"}]"
           else
             echo "   Creating new Secret..."
-            kubectl create secret generic "${SECRET_NAME}" \
+            kubectl create secret tls "${SECRET_NAME}" \
               --namespace="${NAMESPACE}" \
-              --from-file=tls.crt="${CERT_DIR}/tls.crt" \
-              --from-file=tls.key="${CERT_DIR}/tls.key" \
+              --cert="${CERT_DIR}/tls.crt" \
+              --key="${CERT_DIR}/tls.key" \
               --dry-run=client -o yaml | kubectl apply -f -
           fi
           
