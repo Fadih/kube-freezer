@@ -146,11 +146,26 @@ jobs:
           # Create a pages directory structure
           mkdir -p ./pages/docs
           
-          # Copy Helm charts
-          cp -r ./charts ./pages/
+          # Copy Helm charts (should exist from previous step)
+          if [ -d "./charts" ]; then
+            cp -r ./charts ./pages/
+            echo "✅ Helm charts copied"
+          else
+            echo "❌ Charts directory not found!"
+            exit 1
+          fi
           
-          # Copy documentation files
-          cp -r ./docs ./pages/
+          # Copy documentation files if they exist
+          if [ -d "./docs" ]; then
+            cp -r ./docs ./pages/
+            echo "✅ Documentation files copied"
+          else
+            echo "⚠️  Docs directory not found, creating placeholder"
+            mkdir -p ./pages/docs
+            echo "# Documentation" > ./pages/docs/README.md
+            echo "" >> ./pages/docs/README.md
+            echo "Documentation files are available in the [GitHub repository](https://github.com/${{ github.repository }}/tree/main/docs)." >> ./pages/docs/README.md
+          fi
           
           # Create an index.html for the documentation site
           REPO_OWNER="${{ github.repository_owner }}"
@@ -253,14 +268,8 @@ jobs:
                   
                   <div class="section">
                       <h2>📚 Documentation</h2>
-                      <a href="docs/API_KEYS.md" class="doc-link">🔑 API Keys - How to generate and use API keys</a>
-                      <a href="docs/AUTHENTICATION.md" class="doc-link">🔐 Authentication - Authentication methods and setup</a>
-                      <a href="docs/BACKEND_AUTHENTICATION.md" class="doc-link">🔒 Backend Authentication - Backend authentication details</a>
-                      <a href="docs/FRONTEND_DEPLOYMENT.md" class="doc-link">🎨 Frontend Deployment - Frontend deployment guide</a>
-                      <a href="docs/HOW_TO_USE_TEMPLATES.md" class="doc-link">📋 How to Use Templates - Template usage guide</a>
-                      <a href="docs/TEMPLATE_APIS.md" class="doc-link">🔌 Template APIs - Template API reference</a>
-                      <a href="docs/TEMPLATES_VS_SCHEDULES.md" class="doc-link">⚖️ Templates vs Schedules - Understanding the difference</a>
-                      <a href="docs/TROUBLESHOOTING_TEMPLATES.md" class="doc-link">🔧 Troubleshooting Templates - Common issues and solutions</a>
+                      <p>For detailed documentation, please visit the <a href="https://github.com/{repo_name}">GitHub repository</a>.</p>
+                      <p>Documentation files are available in the repository's <code>docs/</code> directory (if present).</p>
                   </div>
                   
                   <div class="section">
