@@ -39,8 +39,8 @@ helm repo update
 helm install kube-freezer kube-freezer/kube-freezer \
   --namespace kube-freezer \
   --create-namespace \
-  --set backend.image.tag=1.2.6 \
-  --set frontend.image.tag=1.2.6
+  --set backend.image.tag=1.2.7 \
+  --set frontend.image.tag=1.2.7
 ```
 
 Replace `1.2.0` with the version you want to install (check [releases](https://github.com/Fadih/kube-freezer/releases) for available versions).
