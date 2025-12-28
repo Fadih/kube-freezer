@@ -1,0 +1,79 @@
+name: Release Application
+
+on:
+  release:
+    types: [published]  # Trigger when a GitHub Release is published
+
+env:
+  REGISTRY: docker.io  # Change to your Artifactory registry if needed
+  BACKEND_IMAGE: fadihussien/kubefreezer
+  FRONTEND_IMAGE: fadihussien/kubefreezer-ui
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Docker Hub (or Artifactory)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      
+      - name: Determine version from release tag
+        id: version
+        run: |
+          # Get version from release tag name (e.g., v1.0.0 -> 1.0.0)
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          # Remove 'v' prefix if present
+          VERSION="${TAG_NAME#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release tag: $TAG_NAME"
+          echo "Application version: $VERSION"
+      
+      - name: Build and push backend image using Makefile
+        run: |
+          cd ${{ github.workspace }}
+          make docker-push-backend \
+            BACKEND_TAG=${{ steps.version.outputs.version }} \
+            BACKEND_IMAGE=${{ env.BACKEND_IMAGE }}
+      
+      - name: Build and push frontend image using Makefile
+        run: |
+          cd ${{ github.workspace }}
+          make docker-push-frontend \
+            FRONTEND_TAG=${{ steps.version.outputs.version }} \
+            FRONTEND_IMAGE=${{ env.FRONTEND_IMAGE }}
+      
+      - name: Tag images as latest
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          docker pull ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:$VERSION
+          docker pull ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:$VERSION
+          docker tag ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:$VERSION ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:latest
+          docker tag ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:$VERSION ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:latest
+          docker push ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:latest
+          docker push ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:latest
+      
+      - name: Output release summary
+        run: |
+          echo "✅ Release completed successfully!"
+          echo ""
+          echo "Docker Images Published:"
+          echo "  Backend:  ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.version }}"
+          echo "  Backend:  ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:latest"
+          echo "  Frontend: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.version }}"
+          echo "  Frontend: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:latest"
+          echo ""
+          echo "Release Tag: ${{ github.event.release.tag_name }}"
+          echo "Version: ${{ steps.version.outputs.version }}"

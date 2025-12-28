@@ -1,0 +1,142 @@
+name: Release Helm Chart
+
+on:
+  release:
+    types: [published]  # Trigger when a GitHub Release is published
+
+jobs:
+  helm-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'latest'
+      
+      - name: Determine version from release tag
+        id: version
+        run: |
+          # Get version from release tag name (e.g., v1.0.0 -> 1.0.0)
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          # Remove 'v' prefix if present
+          VERSION="${TAG_NAME#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release tag: $TAG_NAME"
+          echo "Chart version: $VERSION"
+      
+      - name: Update Chart.yaml version and image tags
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          # Update chart version in Chart.yaml
+          sed -i "s/^version:.*/version: $VERSION/" helm/kube-freezer/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" helm/kube-freezer/Chart.yaml
+          # Update image tags in values.yaml to match the released version
+          sed -i "s|tag: \".*\"|tag: \"$VERSION\"|g" helm/kube-freezer/values.yaml
+          echo "✅ Updated Chart.yaml:"
+          cat helm/kube-freezer/Chart.yaml
+          echo ""
+          echo "✅ Updated image tags in values.yaml:"
+          grep -E "tag:|repository:" helm/kube-freezer/values.yaml | head -4
+      
+      - name: Package Helm chart
+        run: |
+          mkdir -p ./charts
+          helm package helm/kube-freezer -d ./charts
+          echo "✅ Packaged chart:"
+          ls -lh ./charts/
+      
+      - name: Create Helm repository index
+        run: |
+          helm repo index ./charts --url https://${{ github.repository_owner }}.github.io/kube-freezer
+          echo "✅ Created index.yaml:"
+          cat ./charts/index.yaml
+      
+      - name: Download existing index (if any)
+        run: |
+          mkdir -p ./charts-existing
+          curl -sL https://${{ github.repository_owner }}.github.io/kube-freezer/index.yaml > ./charts-existing/index.yaml || echo "No existing index found"
+      
+      - name: Merge with existing index
+        run: |
+          if [ -f ./charts-existing/index.yaml ]; then
+            echo "Merging with existing index..."
+            helm repo index ./charts --merge ./charts-existing/index.yaml --url https://${{ github.repository_owner }}.github.io/kube-freezer
+            echo "✅ Merged index.yaml:"
+            cat ./charts/index.yaml
+          fi
+      
+      - name: Create GitHub Release with chart archive
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./charts/*.tgz
+          body: |
+            ## Helm Chart Release
+            
+            ### Installation
+            
+            ```bash
+            helm repo add kube-freezer https://${{ github.repository_owner }}.github.io/kube-freezer
+            helm repo update
+            helm install kube-freezer kube-freezer/kube-freezer \
+              --namespace kube-freezer \
+              --create-namespace \
+              --set backend.image.tag=${{ steps.version.outputs.version }} \
+              --set frontend.image.tag=${{ steps.version.outputs.version }}
+            ```
+            
+            ### Chart Information
+            - **Chart Version**: ${{ steps.version.outputs.version }}
+            - **App Version**: ${{ steps.version.outputs.version }}
+            - **Release Tag**: ${{ github.event.release.tag_name }}
+            
+            ### Using the installation script
+            
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install-freezer.sh | \
+              CHART_VERSION=${{ steps.version.outputs.version }} \
+              BACKEND_TAG=${{ steps.version.outputs.version }} \
+              FRONTEND_TAG=${{ steps.version.outputs.version }} \
+              bash -s -- install
+            ```
+          draft: false
+          prerelease: false
+          tag_name: ${{ github.event.release.tag_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
+      
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: ./charts
+      
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
+      
+      - name: Output release summary
+        run: |
+          echo "✅ Helm chart release completed successfully!"
+          echo ""
+          echo "Helm Chart Published:"
+          echo "  Chart Version: ${{ steps.version.outputs.version }}"
+          echo "  Release Tag: ${{ github.event.release.tag_name }}"
+          echo "  Repository: https://${{ github.repository_owner }}.github.io/kube-freezer"
+          echo ""
+          echo "Installation:"
+          echo "  helm repo add kube-freezer https://${{ github.repository_owner }}.github.io/kube-freezer"
+          echo "  helm repo update"
+          echo "  helm install kube-freezer kube-freezer/kube-freezer --namespace kube-freezer --create-namespace"
+

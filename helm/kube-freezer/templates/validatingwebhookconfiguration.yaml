@@ -1,0 +1,35 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ include "kube-freezer.fullname" . }}
+  labels:
+    {{- include "kube-freezer.labels" . | nindent 4 }}
+webhooks:
+  - name: {{ include "kube-freezer.fullname" . }}.admission.kubefreezer.io
+    admissionReviewVersions: ["v1", "v1beta1"]
+    clientConfig:
+      service:
+        name: {{ include "kube-freezer.fullname" . }}-backend
+        namespace: {{ include "kube-freezer.namespace" . }}
+        path: "/admission"
+        port: 443
+      caBundle: ""  # Will be populated by installation script (generate-certs.sh)
+    rules:
+      {{- range .Values.webhook.rules }}
+      - apiGroups: {{ .apiGroups | toJson }}
+        apiVersions: {{ .apiVersions | toJson }}
+        operations: {{ .operations | toJson }}
+        resources: {{ .resources | toJson }}
+        {{- if .scope }}
+        scope: {{ .scope | quote }}
+        {{- end }}
+      {{- end }}
+    failurePolicy: {{ .Values.webhook.failurePolicy }}
+    sideEffects: None
+    timeoutSeconds: {{ .Values.webhook.timeoutSeconds }}
+    namespaceSelector:
+      matchExpressions:
+        - key: kubefreezer.io/exempt
+          operator: NotIn
+          values: ["true"]
+

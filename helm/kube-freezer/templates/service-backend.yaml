@@ -1,0 +1,21 @@
+{{- if .Values.backend.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kube-freezer.fullname" . }}-backend
+  namespace: {{ include "kube-freezer.namespace" . }}
+  labels:
+    {{- include "kube-freezer.labels" . | nindent 4 }}
+    component: backend
+spec:
+  type: {{ .Values.service.backend.type }}
+  ports:
+    - port: {{ .Values.service.backend.port }}
+      targetPort: https
+      protocol: TCP
+      name: https
+  selector:
+    {{- include "kube-freezer.selectorLabels" . | nindent 4 }}
+    component: backend
+{{- end }}
+

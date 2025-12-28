@@ -1,0 +1,15 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "kube-freezer.fullname" . }}-configmap-creator
+  namespace: {{ include "kube-freezer.namespace" . }}
+  labels:
+    {{- include "kube-freezer.labels" . | nindent 4 }}
+rules:
+  # Allow creating ConfigMaps in namespace (resourceNames restriction doesn't work for CREATE on non-existent resources)
+  # This is namespace-scoped, so it only applies to this namespace, which is safe
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create"]
+  # Then allow access to specific ConfigMaps after creation (via ClusterRole)
+

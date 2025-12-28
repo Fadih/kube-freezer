@@ -1,0 +1,2 @@
+"""Freeze templates"""
+

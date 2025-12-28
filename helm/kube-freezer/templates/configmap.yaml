@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kube-freezer.fullname" . }}-config
+  namespace: {{ include "kube-freezer.namespace" . }}
+  labels:
+    {{- include "kube-freezer.labels" . | nindent 4 }}
+data:
+  freeze_enabled: {{ .Values.config.freeze_enabled | quote }}
+  freeze_until: {{ .Values.config.freeze_until | quote }}
+  freeze_message: {{ .Values.config.freeze_message | quote }}
+  bypass_annotation_key: {{ .Values.config.bypass_annotation_key | quote }}
+  bypass_allowed_users: |
+{{ .Values.config.bypass_allowed_users | indent 4 }}
+  # API Authorization: List of ServiceAccounts allowed to use the API
+  # Format: system:serviceaccount:<namespace>:<name>
+  # If empty, all authenticated ServiceAccounts are allowed (less secure)
+  api_allowed_serviceaccounts: |
+{{ .Values.config.api_allowed_serviceaccounts | indent 4 }}
+  bypass_exempt_namespaces: |
+{{ .Values.config.bypass_exempt_namespaces | indent 4 }}
+  monitored_resources: |
+{{ .Values.config.monitored_resources | toYaml | indent 4 }}
+  fail_closed: {{ .Values.config.fail_closed | quote }}
+  # Note: freeze_schedule is now stored in a separate ConfigMap (kube-freezer-schedules)
+  # This prevents schedules from being deleted during Helm upgrades
+

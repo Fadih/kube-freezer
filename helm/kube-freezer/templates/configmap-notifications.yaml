@@ -1,0 +1,14 @@
+{{- if .Values.notifications.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kube-freezer.fullname" . }}-notifications
+  namespace: {{ include "kube-freezer.namespace" . }}
+  labels:
+    {{- include "kube-freezer.labels" . | nindent 4 }}
+data:
+  enabled: {{ .Values.notifications.enabled | quote }}
+  providers: |
+{{ .Values.notifications.providers | toYaml | indent 4 }}
+{{- end }}
+

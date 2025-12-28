@@ -1,0 +1,17 @@
+apiVersion: v2
+name: kube-freezer
+description: Kubernetes admission controller for deployment freeze management
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - kubernetes
+  - admission-controller
+  - deployment-freeze
+  - policy-enforcement
+home: https://github.com/Fadih/kube-freezer
+sources:
+  - https://github.com/Fadih/kube-freezer
+maintainers:
+  - name: Fadi Hussein
+

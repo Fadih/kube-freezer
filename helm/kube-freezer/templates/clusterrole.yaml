@@ -1,0 +1,31 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "kube-freezer.fullname" . }}
+  labels:
+    {{- include "kube-freezer.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["{{ include "kube-freezer.fullname" . }}-config"]
+    verbs: ["get", "watch", "list", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["{{ include "kube-freezer.fullname" . }}-api-keys"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames:
+      - "{{ include "kube-freezer.fullname" . }}-templates"
+      - "{{ include "kube-freezer.fullname" . }}-notifications"
+      - "{{ include "kube-freezer.fullname" . }}-exemptions"
+      - "kube-freezer-schedules"
+      - "kube-freezer-history"
+    verbs: ["get", "watch", "list", "patch", "update"]
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: ["validatingwebhookconfigurations"]
+    verbs: ["get", "list"]
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["tokenreviews"]
+    verbs: ["create"]
+
