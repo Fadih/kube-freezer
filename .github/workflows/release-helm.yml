@@ -64,15 +64,39 @@ jobs:
       - name: Download existing index (if any)
         run: |
           mkdir -p ./charts-existing
-          curl -sL https://${{ github.repository_owner }}.github.io/kube-freezer/index.yaml > ./charts-existing/index.yaml || echo "No existing index found"
+          if curl -sL -f https://${{ github.repository_owner }}.github.io/kube-freezer/index.yaml > ./charts-existing/index.yaml 2>/dev/null; then
+            # Validate the downloaded file is not empty and is valid YAML
+            if [ -s ./charts-existing/index.yaml ]; then
+              # Try to validate YAML syntax
+              if command -v yq >/dev/null 2>&1 || python3 -c "import yaml; yaml.safe_load(open('./charts-existing/index.yaml'))" 2>/dev/null; then
+                echo "✅ Downloaded existing index.yaml"
+                cat ./charts-existing/index.yaml
+              else
+                echo "⚠️  Existing index.yaml is invalid YAML, will create new one"
+                rm -f ./charts-existing/index.yaml
+              fi
+            else
+              echo "⚠️  Existing index.yaml is empty, will create new one"
+              rm -f ./charts-existing/index.yaml
+            fi
+          else
+            echo "ℹ️  No existing index found (this is normal for first release)"
+          fi
       
       - name: Merge with existing index
         run: |
-          if [ -f ./charts-existing/index.yaml ]; then
+          if [ -f ./charts-existing/index.yaml ] && [ -s ./charts-existing/index.yaml ]; then
             echo "Merging with existing index..."
-            helm repo index ./charts --merge ./charts-existing/index.yaml --url https://${{ github.repository_owner }}.github.io/kube-freezer
-            echo "✅ Merged index.yaml:"
-            cat ./charts/index.yaml
+            # Validate the index before merging
+            if helm repo index ./charts --merge ./charts-existing/index.yaml --url https://${{ github.repository_owner }}.github.io/kube-freezer 2>&1; then
+              echo "✅ Successfully merged index.yaml:"
+              cat ./charts/index.yaml
+            else
+              echo "⚠️  Merge failed, creating new index instead"
+              helm repo index ./charts --url https://${{ github.repository_owner }}.github.io/kube-freezer
+            fi
+          else
+            echo "Creating new index (no existing index to merge)"
           fi
       
       - name: Create GitHub Release with chart archive
