@@ -7,6 +7,9 @@ on:
 jobs:
   helm-release:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: https://${{ github.repository_owner }}.github.io/kube-freezer
     permissions:
       contents: write
       pages: write
