@@ -1,13 +1,13 @@
-{{- if .Values.createNamespace }}
-# NOTE: This template creates the namespace. 
-# If you use Helm's --create-namespace flag, set createNamespace: false in values.yaml
-# to avoid conflicts (Helm will create the namespace automatically).
+# Always create the namespace template so Helm can manage it (including deletion on uninstall)
+# NOTE: If you use --create-namespace, Helm will create the namespace BEFORE this template runs,
+# which means Helm won't manage it and it won't be deleted on uninstall.
+# To ensure proper cleanup, either:
+# 1. Don't use --create-namespace (let this template create it), OR
+# 2. Manually delete the namespace after helm uninstall
 apiVersion: v1
 kind: Namespace
 metadata:
   name: {{ include "kube-freezer.namespace" . }}
   labels:
     {{- include "kube-freezer.labels" . | nindent 4 }}
----
-{{- end }}
 

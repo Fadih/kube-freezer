@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kube-freezer-history
+  namespace: {{ include "kube-freezer.namespace" . }}
+  labels:
+    {{- include "kube-freezer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: history
+data:
+  # History events will be stored here by the application
+  # This ConfigMap is initialized empty and populated by kube-freezer backend
+  events: "[]"
+
