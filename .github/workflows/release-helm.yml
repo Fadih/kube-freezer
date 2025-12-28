@@ -1,7 +1,7 @@
 name: Release Helm Chart
 
 on:
-  push:
+  release:
     types: [published]  # Trigger when a GitHub Release is published
 
 jobs:
