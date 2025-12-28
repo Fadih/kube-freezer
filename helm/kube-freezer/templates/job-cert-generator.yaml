@@ -1,0 +1,121 @@
+{{- if and (not .Values.certificate.useCertManager) (not .Values.certificate.manual) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "kube-freezer.fullname" . }}-cert-generator
+  namespace: {{ include "kube-freezer.namespace" . }}
+  labels:
+    {{- include "kube-freezer.labels" . | nindent 4 }}
+  annotations:
+    # Helm hooks to run before install/upgrade
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "kube-freezer.selectorLabels" . | nindent 8 }}
+        component: cert-generator
+    spec:
+      serviceAccountName: {{ include "kube-freezer.serviceAccountName" . }}
+      restartPolicy: OnFailure
+      containers:
+      - name: cert-generator
+        image: {{ .Values.certificate.generatorImage | default "bitnami/kubectl:latest" }}
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          
+          NAMESPACE="{{ include "kube-freezer.namespace" . }}"
+          SERVICE_NAME="{{ include "kube-freezer.fullname" . }}-backend"
+          SECRET_NAME="{{ include "kube-freezer.fullname" . }}-tls"
+          CERT_DIR="/tmp/certs"
+          
+          echo "🔐 Generating TLS certificates for webhook..."
+          
+          # Create certs directory
+          mkdir -p "${CERT_DIR}"
+          
+          # Generate private key
+          openssl genrsa -out "${CERT_DIR}/tls.key" 2048
+          
+          # Generate certificate signing request
+          openssl req -new -key "${CERT_DIR}/tls.key" \
+            -out "${CERT_DIR}/tls.csr" \
+            -subj "/CN=${SERVICE_NAME}.${NAMESPACE}.svc"
+          
+          # Generate self-signed certificate with proper SANs
+          openssl x509 -req -in "${CERT_DIR}/tls.csr" \
+            -signkey "${CERT_DIR}/tls.key" \
+            -out "${CERT_DIR}/tls.crt" \
+            -days 365 \
+            -extensions v3_req \
+            -extfile <(
+              cat <<EOF
+          [req]
+          distinguished_name = req_distinguished_name
+          req_extensions = v3_req
+          
+          [v3_req]
+          basicConstraints = CA:TRUE
+          keyUsage = nonRepudiation, digitalSignature, keyEncipherment, keyCertSign
+          subjectAltName = @alt_names
+          
+          [alt_names]
+          DNS.1 = ${SERVICE_NAME}
+          DNS.2 = ${SERVICE_NAME}.${NAMESPACE}
+          DNS.3 = ${SERVICE_NAME}.${NAMESPACE}.svc
+          DNS.4 = ${SERVICE_NAME}.${NAMESPACE}.svc.cluster.local
+          EOF
+            )
+          
+          # Base64 encode the certificate and key
+          TLS_CRT=$(cat "${CERT_DIR}/tls.crt" | base64 | tr -d '\n')
+          TLS_KEY=$(cat "${CERT_DIR}/tls.key" | base64 | tr -d '\n')
+          
+          # Check if Secret exists
+          if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" &>/dev/null; then
+            echo "   Patching existing Secret (preserving Helm metadata)..."
+            kubectl patch secret "${SECRET_NAME}" \
+              --namespace="${NAMESPACE}" \
+              --type='json' \
+              -p="[{\"op\": \"replace\", \"path\": \"/data/tls.crt\", \"value\":\"${TLS_CRT}\"}, {\"op\": \"replace\", \"path\": \"/data/tls.key\", \"value\":\"${TLS_KEY}\"}]"
+          else
+            echo "   Creating new Secret..."
+            kubectl create secret generic "${SECRET_NAME}" \
+              --namespace="${NAMESPACE}" \
+              --from-file=tls.crt="${CERT_DIR}/tls.crt" \
+              --from-file=tls.key="${CERT_DIR}/tls.key" \
+              --dry-run=client -o yaml | kubectl apply -f -
+          fi
+          
+          # Extract CA bundle and update ValidatingWebhookConfiguration
+          CA_BUNDLE=$(cat "${CERT_DIR}/tls.crt" | base64 | tr -d '\n')
+          WEBHOOK_NAME="{{ include "kube-freezer.fullname" . }}"
+          
+          echo "   Updating ValidatingWebhookConfiguration with CA bundle..."
+          kubectl patch validatingwebhookconfiguration "${WEBHOOK_NAME}" \
+            --type='json' \
+            -p="[{\"op\": \"replace\", \"path\": \"/webhooks/0/clientConfig/caBundle\", \"value\":\"${CA_BUNDLE}\"}]" || \
+          echo "   Warning: ValidatingWebhookConfiguration not found yet, will be updated after webhook is created"
+          
+          echo "✅ Certificate generated and applied successfully!"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          runAsNonRoot: true
+          runAsUser: 1000
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+{{- end }}
+

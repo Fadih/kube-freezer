@@ -13,7 +13,13 @@ webhooks:
         namespace: {{ include "kube-freezer.namespace" . }}
         path: "/admission"
         port: 443
-      caBundle: ""  # Will be populated by installation script (generate-certs.sh)
+      {{- if .Values.certificate.caBundle }}
+      caBundle: {{ .Values.certificate.caBundle | quote }}
+      {{- else if .Values.certificate.manual }}
+      caBundle: {{ .Values.certificate.cert | b64enc | quote }}
+      {{- else }}
+      caBundle: ""  # Will be populated by certificate generation Job (job-cert-generator.yaml)
+      {{- end }}
     rules:
       {{- range .Values.webhook.rules }}
       - apiGroups: {{ .apiGroups | toJson }}
