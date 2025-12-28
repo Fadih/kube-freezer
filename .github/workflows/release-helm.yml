@@ -171,13 +171,15 @@ jobs:
           REPO_OWNER="${{ github.repository_owner }}"
           REPO_NAME="${{ github.repository }}"
           REPO_URL="https://${REPO_OWNER}.github.io/kube-freezer"
+          VERSION="${{ steps.version.outputs.version }}"
           
-          REPO_OWNER="${REPO_OWNER}" REPO_NAME="${REPO_NAME}" REPO_URL="${REPO_URL}" python3 << 'PYTHON_SCRIPT'
+          REPO_OWNER="${REPO_OWNER}" REPO_NAME="${REPO_NAME}" REPO_URL="${REPO_URL}" VERSION="${VERSION}" python3 << 'PYTHON_SCRIPT'
           import os
           
           repo_owner = os.environ.get('REPO_OWNER', 'Fadih')
           repo_name = os.environ.get('REPO_NAME', 'Fadih/kube-freezer')
           repo_url = os.environ.get('REPO_URL', f'https://{repo_owner}.github.io/kube-freezer')
+          version = os.environ.get('VERSION', 'latest')
           
           html_content = f'''<!DOCTYPE html>
           <html lang="en">
@@ -263,7 +265,9 @@ jobs:
                       <p>Install:</p>
                       <pre>helm install kube-freezer kube-freezer/kube-freezer \\
             --namespace kube-freezer \\
-            --create-namespace</pre>
+            --create-namespace \\
+            --set backend.image.tag={version} \\
+            --set frontend.image.tag={version}</pre>
                   </div>
                   
                   <div class="section">
@@ -315,5 +319,9 @@ jobs:
           echo "Installation:"
           echo "  helm repo add kube-freezer https://${{ github.repository_owner }}.github.io/kube-freezer"
           echo "  helm repo update"
-          echo "  helm install kube-freezer kube-freezer/kube-freezer --namespace kube-freezer --create-namespace"
+          echo "  helm install kube-freezer kube-freezer/kube-freezer \\"
+          echo "    --namespace kube-freezer \\"
+          echo "    --create-namespace \\"
+          echo "    --set backend.image.tag=${{ steps.version.outputs.version }} \\"
+          echo "    --set frontend.image.tag=${{ steps.version.outputs.version }}"
 
