@@ -60,14 +60,14 @@ jobs:
       
       - name: Create Helm repository index
         run: |
-          helm repo index ./charts --url https://${{ github.repository_owner }}.github.io/kube-freezer
+          helm repo index ./charts --url https://${{ github.repository_owner }}.github.io/kube-freezer/charts
           echo "✅ Created index.yaml:"
           cat ./charts/index.yaml
       
       - name: Download existing index (if any)
         run: |
           mkdir -p ./charts-existing
-          if curl -sL -f https://${{ github.repository_owner }}.github.io/kube-freezer/index.yaml > ./charts-existing/index.yaml 2>/dev/null; then
+          if curl -sL -f https://${{ github.repository_owner }}.github.io/kube-freezer/charts/index.yaml > ./charts-existing/index.yaml 2>/dev/null; then
             # Validate the downloaded file is not empty and is valid YAML
             if [ -s ./charts-existing/index.yaml ]; then
               # Try to validate YAML syntax
@@ -91,12 +91,12 @@ jobs:
           if [ -f ./charts-existing/index.yaml ] && [ -s ./charts-existing/index.yaml ]; then
             echo "Merging with existing index..."
             # Validate the index before merging
-            if helm repo index ./charts --merge ./charts-existing/index.yaml --url https://${{ github.repository_owner }}.github.io/kube-freezer 2>&1; then
+            if helm repo index ./charts --merge ./charts-existing/index.yaml --url https://${{ github.repository_owner }}.github.io/kube-freezer/charts 2>&1; then
               echo "✅ Successfully merged index.yaml:"
               cat ./charts/index.yaml
             else
               echo "⚠️  Merge failed, creating new index instead"
-              helm repo index ./charts --url https://${{ github.repository_owner }}.github.io/kube-freezer
+              helm repo index ./charts --url https://${{ github.repository_owner }}.github.io/kube-freezer/charts
             fi
           else
             echo "Creating new index (no existing index to merge)"
@@ -148,8 +148,11 @@ jobs:
           
           # Copy Helm charts (should exist from previous step)
           if [ -d "./charts" ]; then
+            # Copy chart packages to charts subdirectory
             cp -r ./charts ./pages/
-            echo "✅ Helm charts copied"
+            # Also copy index.yaml to root for Helm compatibility
+            cp ./charts/index.yaml ./pages/index.yaml
+            echo "✅ Helm charts copied (index.yaml at root and in charts/)"
           else
             echo "❌ Charts directory not found!"
             exit 1
