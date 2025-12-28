@@ -5,6 +5,12 @@ namespace: kube-freezer
 # The namespace template will only create the namespace if this is true AND --create-namespace is not used
 createNamespace: false
 
+# Cleanup configuration
+# If true, a post-delete hook will clean up ALL resources including namespace, secrets, ConfigMaps, etc.
+# WARNING: This will delete everything in the namespace, including data not managed by Helm
+# Set to false if you want to preserve data after uninstall
+cleanupOnUninstall: true
+
 # Backend configuration
 backend:
   enabled: true

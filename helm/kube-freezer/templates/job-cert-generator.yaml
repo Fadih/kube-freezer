@@ -76,28 +76,85 @@ spec:
           EOF
             )
           
-          # Base64 encode the certificate and key
-          TLS_CRT=$(cat "${CERT_DIR}/tls.crt" | base64 | tr -d '\n')
-          TLS_KEY=$(cat "${CERT_DIR}/tls.key" | base64 | tr -d '\n')
-          
-          # Check if Secret exists
+          # Check if Secret exists and validate the certificate before generating new one
+          REGENERATE_CERT=true
           if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" &>/dev/null; then
-            echo "   Patching existing Secret (preserving Helm metadata)..."
-            kubectl patch secret "${SECRET_NAME}" \
-              --namespace="${NAMESPACE}" \
-              --type='json' \
-              -p="[{\"op\": \"replace\", \"path\": \"/data/tls.crt\", \"value\":\"${TLS_CRT}\"}, {\"op\": \"replace\", \"path\": \"/data/tls.key\", \"value\":\"${TLS_KEY}\"}]"
+            echo "   Existing Secret found. Checking certificate validity..."
+            # Extract existing certificate and check expiration
+            EXISTING_CERT=$(kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" \
+              -o jsonpath='{.data.tls\.crt}' | base64 -d 2>/dev/null || echo "")
+            
+            if [ -n "$EXISTING_CERT" ]; then
+              # Save existing cert to temp file for validation
+              echo "$EXISTING_CERT" > "${CERT_DIR}/existing.crt"
+              
+              # Check if certificate is expired or will expire soon (within 30 days)
+              EXPIRY_DATE=$(openssl x509 -in "${CERT_DIR}/existing.crt" -noout -enddate 2>/dev/null | cut -d= -f2 || echo "")
+              
+              if [ -n "$EXPIRY_DATE" ]; then
+                CURRENT_DATE=$(date +%s)
+                EXPIRY_TIMESTAMP=$(date -j -f "%b %d %H:%M:%S %Y %Z" "$EXPIRY_DATE" +%s 2>/dev/null || \
+                                  date -d "$EXPIRY_DATE" +%s 2>/dev/null || echo "0")
+                
+                if [ "$EXPIRY_TIMESTAMP" -gt 0 ]; then
+                  DAYS_REMAINING=$(( ($EXPIRY_TIMESTAMP - $CURRENT_DATE) / 86400 ))
+                  
+                  if [ "$DAYS_REMAINING" -lt 0 ]; then
+                    echo "   ⚠️  Certificate has EXPIRED (expired $(( -$DAYS_REMAINING )) days ago). Regenerating..."
+                  elif [ "$DAYS_REMAINING" -lt 30 ]; then
+                    echo "   ⚠️  Certificate expires soon (in $DAYS_REMAINING days). Regenerating..."
+                  else
+                    echo "   ✅ Certificate is valid (expires in $DAYS_REMAINING days)"
+                    echo "   Reusing existing certificate..."
+                    REGENERATE_CERT=false
+                  fi
+                else
+                  echo "   ⚠️  Could not parse certificate expiration. Regenerating for safety..."
+                fi
+              else
+                echo "   ⚠️  Could not read certificate expiration. Regenerating..."
+              fi
+              
+              # Clean up temp file
+              rm -f "${CERT_DIR}/existing.crt"
+            else
+              echo "   ⚠️  Secret exists but certificate is empty or invalid. Regenerating..."
+            fi
           else
-            echo "   Creating new Secret..."
-            kubectl create secret tls "${SECRET_NAME}" \
-              --namespace="${NAMESPACE}" \
-              --cert="${CERT_DIR}/tls.crt" \
-              --key="${CERT_DIR}/tls.key" \
-              --dry-run=client -o yaml | kubectl apply -f -
+            echo "   No existing Secret found. Creating new certificate..."
           fi
           
-          # Extract CA bundle and update ValidatingWebhookConfiguration
-          CA_BUNDLE=$(cat "${CERT_DIR}/tls.crt" | base64 | tr -d '\n')
+          # Generate new certificate if needed
+          if [ "$REGENERATE_CERT" = true ]; then
+            # Base64 encode the newly generated certificate and key
+            TLS_CRT=$(cat "${CERT_DIR}/tls.crt" | base64 | tr -d '\n')
+            TLS_KEY=$(cat "${CERT_DIR}/tls.key" | base64 | tr -d '\n')
+            
+            # Update or create Secret
+            if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" &>/dev/null; then
+              echo "   Updating Secret with new certificate..."
+              kubectl patch secret "${SECRET_NAME}" \
+                --namespace="${NAMESPACE}" \
+                --type='json' \
+                -p="[{\"op\": \"replace\", \"path\": \"/data/tls.crt\", \"value\":\"${TLS_CRT}\"}, {\"op\": \"replace\", \"path\": \"/data/tls.key\", \"value\":\"${TLS_KEY}\"}]"
+            else
+              echo "   Creating new Secret..."
+              kubectl create secret tls "${SECRET_NAME}" \
+                --namespace="${NAMESPACE}" \
+                --cert="${CERT_DIR}/tls.crt" \
+                --key="${CERT_DIR}/tls.key" \
+                --dry-run=client -o yaml | kubectl apply -f -
+            fi
+            
+            # Use the newly generated certificate for CA bundle
+            CA_BUNDLE="${TLS_CRT}"
+          else
+            # Extract CA bundle from existing certificate in secret
+            echo "   Using existing certificate for CA bundle..."
+            CA_BUNDLE=$(kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" \
+              -o jsonpath='{.data.tls\.crt}')
+          fi
+          
           WEBHOOK_NAME="{{ include "kube-freezer.fullname" . }}"
           
           echo "   Updating ValidatingWebhookConfiguration with CA bundle..."

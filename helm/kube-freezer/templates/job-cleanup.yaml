@@ -1,0 +1,103 @@
+{{- if .Values.cleanupOnUninstall }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "kube-freezer.fullname" . }}-cleanup
+  namespace: {{ include "kube-freezer.namespace" . }}
+  labels:
+    {{- include "kube-freezer.labels" . | nindent 4 }}
+  annotations:
+    # Run this job after Helm uninstalls all resources
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "kube-freezer.selectorLabels" . | nindent 8 }}
+        component: cleanup
+    spec:
+      serviceAccountName: {{ include "kube-freezer.serviceAccountName" . }}
+      restartPolicy: OnFailure
+      containers:
+      - name: cleanup
+        image: {{ .Values.certificate.generatorImage | default "bitnami/kubectl:latest" }}
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          
+          NAMESPACE="{{ include "kube-freezer.namespace" . }}"
+          RELEASE_NAME="{{ .Release.Name }}"
+          
+          echo "🧹 Starting cleanup of KubeFreezer resources..."
+          echo ""
+          
+          # Wait a moment for Helm to finish deleting managed resources
+          echo "⏳ Waiting for Helm to finish deleting managed resources..."
+          sleep 5
+          
+          # Delete all secrets (including TLS and API keys)
+          echo "🗑️  Deleting secrets..."
+          kubectl delete secrets -n "${NAMESPACE}" --all --ignore-not-found=true || true
+          
+          # Delete all ConfigMaps (including schedules, notifications, templates)
+          echo "🗑️  Deleting ConfigMaps..."
+          kubectl delete configmaps -n "${NAMESPACE}" --all --ignore-not-found=true || true
+          
+          # Delete any remaining jobs
+          echo "🗑️  Deleting jobs..."
+          kubectl delete jobs -n "${NAMESPACE}" --all --ignore-not-found=true || true
+          
+          # Delete any remaining pods (orphaned pods)
+          echo "🗑️  Deleting pods..."
+          kubectl delete pods -n "${NAMESPACE}" --all --ignore-not-found=true || true
+          
+          # Delete PVCs if any
+          echo "🗑️  Deleting PVCs..."
+          kubectl delete pvc -n "${NAMESPACE}" --all --ignore-not-found=true || true
+          
+          # Delete the namespace itself
+          echo "🗑️  Deleting namespace '${NAMESPACE}'..."
+          if kubectl get namespace "${NAMESPACE}" &>/dev/null; then
+            kubectl delete namespace "${NAMESPACE}" --ignore-not-found=true --wait=false || true
+            echo "   Namespace deletion initiated (may take a moment to complete)"
+          else
+            echo "   Namespace already deleted"
+          fi
+          
+          # Clean up ValidatingWebhookConfiguration (if not already deleted)
+          echo "🗑️  Cleaning up ValidatingWebhookConfiguration..."
+          WEBHOOK_NAME="{{ include "kube-freezer.fullname" . }}"
+          kubectl delete validatingwebhookconfiguration "${WEBHOOK_NAME}" --ignore-not-found=true || true
+          
+          # Clean up ClusterRole and ClusterRoleBinding (if not already deleted)
+          echo "🗑️  Cleaning up cluster-level resources..."
+          CLUSTER_ROLE="{{ include "kube-freezer.fullname" . }}"
+          CLUSTER_ROLE_BINDING="{{ include "kube-freezer.fullname" . }}"
+          kubectl delete clusterrole "${CLUSTER_ROLE}" --ignore-not-found=true || true
+          kubectl delete clusterrolebinding "${CLUSTER_ROLE_BINDING}" --ignore-not-found=true || true
+          
+          echo ""
+          echo "✅ Cleanup completed!"
+          echo ""
+          echo "Note: Namespace deletion may take a few moments to complete."
+          echo "You can check with: kubectl get namespace ${NAMESPACE}"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          runAsNonRoot: true
+          runAsUser: 1000
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+{{- end }}
+
