@@ -289,7 +289,7 @@ class ConfigLoader:
                         logger.debug(f"Extracted monitored_resources from YAML-like string: {resources}")
                     else:
                         # Fall back to comma split
-                    config_data["monitored_resources"] = [
+                        config_data["monitored_resources"] = [
                             r.strip() for r in monitored_str.split(",") if r.strip()
                         ] or ["deployments"]
             else:

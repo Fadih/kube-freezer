@@ -158,7 +158,7 @@ def is_schedule_active(
         # Schedule has no namespaces specified - applies to ALL namespaces EXCEPT exempt ones
         if namespace and namespace in exempt_namespaces:
             # This namespace is exempt, so don't apply the schedule
-        return False
+            return False
     
     # Use UTC for all time operations
     if current_time.tzinfo is None:
@@ -203,7 +203,7 @@ def is_schedule_active(
     # Cron is required - check if freeze is active when cron matches
     cron = schedule.get("cron")
     if not cron:
-    return False
+        return False
 
     return _check_cron_active(cron, current_time_utc, start, end)
 
@@ -263,7 +263,7 @@ def _check_cron_active(
         
         # If match is after end date or after current time, not active
         if cron_match > end or cron_match > current_time:
-    return False
+            return False
         
         # Calculate end of day for the cron match day (in UTC)
         # Set to 23:59:59.999999 of the same day as the cron match

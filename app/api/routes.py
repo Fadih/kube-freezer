@@ -883,7 +883,7 @@ async def apply_template(
                 success = save_schedules(updated_schedules)
             else:
                 # Add new schedule
-            success = add_schedule(freeze_config)
+                success = add_schedule(freeze_config)
             
             if not success:
                 raise HTTPException(status_code=500, detail="Failed to save schedule to ConfigMap")
