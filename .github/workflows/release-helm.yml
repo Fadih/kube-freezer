@@ -104,6 +104,8 @@ jobs:
       
       - name: Create GitHub Release with chart archive
         uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           files: ./charts/*.tgz
           body: |
@@ -138,9 +140,20 @@ jobs:
           draft: false
           prerelease: false
           tag_name: ${{ github.event.release.tag_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+        with:
+          enablement: true  # Automatically enable Pages if not enabled
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./charts
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
       
       - name: Output release summary
         run: |
