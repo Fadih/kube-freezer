@@ -14,7 +14,7 @@ rules:
     resourceNames: 
       - "{{ include "kube-freezer.fullname" . }}-api-keys"
       - "{{ include "kube-freezer.fullname" . }}-tls"
-    verbs: ["get", "list", "create", "patch", "update"]
+    verbs: ["get", "list", "patch", "update"]
   - apiGroups: [""]
     resources: ["configmaps"]
     resourceNames:
