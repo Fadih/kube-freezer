@@ -273,7 +273,6 @@ jobs:
                   <div class="section">
                       <h2>📚 Documentation</h2>
                       <p>For detailed documentation, please visit the <a href="https://github.com/{repo_name}">GitHub repository</a>.</p>
-                      <p>Documentation files are available in the repository's <code>docs/</code> directory (if present).</p>
                   </div>
                   
                   <div class="section">

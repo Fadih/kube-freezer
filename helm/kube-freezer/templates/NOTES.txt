@@ -40,7 +40,7 @@
 
 📚 Documentation:
    - GitHub Repository: https://github.com/Fadih/kube-freezer
-   - API Documentation: https://fadih.github.io/kube-freezer/
+   - Documentation: https://fadih.github.io/kube-freezer/
 
 
 
