@@ -26,7 +26,7 @@
    
 
    Frontend UI (HTTP):
-   - Service: {{ $frontendService }}.{{ $namespace }}.svc.cluster.local:80
+   - Service: {{ $frontendService }}-frontend.{{ $namespace }}.svc.cluster.local:80
    - Port-forward: kubectl port-forward -n {{ $namespace }} svc/{{ $frontendService }}-frontend 8080:80
    - Then access: http://localhost:8080
 
